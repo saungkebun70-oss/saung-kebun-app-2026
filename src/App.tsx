@@ -1,62 +1,92 @@
-﻿import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-function App() {
-  const [name, setName] = useState('')
-  const [pin, setPin] = useState('')
+type UserRole = 'ketua' | 'bendahara' | 'warga' | 'petugas'
 
-  const handleLogin = () => {
-    alert(`Login berhasil!\nNama: ${name}\nPIN: ${pin}`)
+interface User {
+  id: string
+  name: string
+  pin: string
+  role: UserRole
+  blockNumber?: string
+  phone?: string
+  isActive: boolean
+}
+
+interface MonthlyDue {
+  id: string
+  userId: string
+  userName: string
+  blockNumber: string
+  month: number
+  year: number
+  amount: number
+  status: 'unpaid' | 'waiting_bendahara' | 'waiting_ketua' | 'verified'
+  paidAt?: string
+  proofImageName?: string
+  paymentMethod?: string
+  verifiedByBendahara?: string
+  verifiedAtBendahara?: string
+  verifiedByKetua?: string
+  verifiedAtKetua?: string
+  stampId?: string
+}
+
+const initialUsers: User[] = [
+  { id: '1', name: 'Ahmad Suryadi', pin: '0001', role: 'ketua', phone: '081234567890', isActive: true },
+  { id: '2', name: 'Siti Rahayu', pin: '0002', role: 'bendahara', phone: '081234567891', isActive: true },
+  { id: '3', name: 'Budi Santoso', pin: '1001', role: 'warga', blockNumber: 'A-1', phone: '081234567892', isActive: true },
+  { id: '4', name: 'Dewi Lestari', pin: '1002', role: 'warga', blockNumber: 'A-2', phone: '081234567893', isActive: true },
+  { id: '5', name: 'Pak Joko', pin: '2001', role: 'petugas', blockNumber: 'P-1', phone: '081234567894', isActive: true },
+]
+
+const getMonthName = (m: number) => ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][m-1]
+const formatCurrency = (n: number) => 'Rp ' + n.toLocaleString('id-ID')
+const formatDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2)
+export default function App() {
+  const [user, setUser] = useState<User | null>(() => {
+    const s = sessionStorage.getItem('sk_user')
+    return s ? JSON.parse(s) : null
+  })
+  const [users, setUsers] = useState<User[]>(() => {
+    const s = localStorage.getItem('sk_users')
+    return s ? JSON.parse(s) : initialUsers
+  })
+  const [dues, setDues] = useState<MonthlyDue[]>(() => {
+    const s = localStorage.getItem('sk_dues')
+    return s ? JSON.parse(s) : []
+  })
+  const [page, setPage] = useState('dashboard')
+
+  useEffect(() => { localStorage.setItem('sk_users', JSON.stringify(users)) }, [users])
+  useEffect(() => { localStorage.setItem('sk_dues', JSON.stringify(dues)) }, [dues])
+  useEffect(() => {
+    if (user) sessionStorage.setItem('sk_user', JSON.stringify(user))
+    else sessionStorage.removeItem('sk_user')
+  }, [user])
+
+  const login = (name: string, pin: string) => {
+    const found = users.find(u => u.name.toLowerCase() === name.toLowerCase() && u.pin === pin && u.isActive)
+    if (found) { setUser(found); return true }
+    return false
   }
 
+  const logout = () => setUser(null)
+
+  if (!user) return <LoginPage onLogin={login} />
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-600 to-emerald-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-            <span className="text-3xl">🏠</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">Saung Kebun</h1>
-          <p className="text-gray-500 mt-1">Sistem Pengelolaan Keuangan</p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nama</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-              placeholder="Masukkan nama"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">PIN</label>
-            <input
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-              placeholder="Masukkan PIN"
-              maxLength={4}
-            />
-          </div>
-
-          <button
-            onClick={handleLogin}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition"
-          >
-            Masuk
-          </button>
-        </div>
-
-        <div className="mt-6 pt-6 border-t border-gray-100 text-xs text-gray-500 text-center">
-          <p>Demo: Ahmad Suryadi / PIN: 0001</p>
-        </div>
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar page={page} onNavigate={setPage} user={user} onLogout={logout} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header user={user} />
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          {page === 'dashboard' && <Dashboard user={user} dues={dues} users={users} />}
+          {page === 'iuran' && <IuranPage user={user} dues={dues} setDues={setDues} users={users} />}
+          {page === 'laporan' && <LaporanPage dues={dues} />}
+          {page === 'users' && <UsersPage users={users} setUsers={setUsers} />}
+        </main>
       </div>
     </div>
   )
 }
-
-export default App
